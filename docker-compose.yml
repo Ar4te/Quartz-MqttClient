@@ -1,0 +1,6 @@
+﻿services:
+  quartztest:
+    image: quartztest
+    build:
+      context: .
+      dockerfile: QuartzTest/Dockerfile
