@@ -6,7 +6,11 @@ namespace QuartzTest.MqttTest;
 
 
 #region Reference
+//mqtt
 //https://www.cnblogs.com/weskynet/p/16441219.html
+//quartz
+//https://www.cnblogs.com/workcn/p/17491550.html
+//https://www.cnblogs.com/youring2/p/quartz_net.html
 #endregion
 public class MqttClientService
 {
