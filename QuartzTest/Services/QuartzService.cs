@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using Quartz;
+using Quartz.Impl.Matchers;
 using QuartzTest.IServices;
 
 namespace QuartzTest.Services;
@@ -6,12 +8,10 @@ namespace QuartzTest.Services;
 public class QuartzService : IQuartzService
 {
     private readonly ISchedulerFactory _schedulerFactory;
-    //private readonly IScheduler _scheduler;
+
     public QuartzService(ISchedulerFactory schedulerFactory)
     {
         _schedulerFactory = schedulerFactory;
-        //_scheduler = schedulerFactory.GetScheduler().Result;
-        //Shutdown();
     }
 
     public async Task Start()
@@ -32,41 +32,93 @@ public class QuartzService : IQuartzService
         }
     }
 
-    public async Task AddJob<T>(string jobName, string cron, bool startNow = false) where T : IJob
+    #region AddJob
+    public async Task AddJob(IJobDetail jobDetail, ITrigger trigger)
     {
         var scheduler = await _schedulerFactory.GetScheduler();
-
-        var jobKey = new JobKey(jobName);
-        var job = JobBuilder.Create<T>()
-            .WithIdentity(jobKey)
-            .UsingJobData("name", jobName)
-            .Build();
-
-        var trigger = TriggerBuilder.Create()
-            .ForJob(jobKey)
-            .WithIdentity(jobName)
-            //.StartNow()
-            .WithCronSchedule(cron)
-            .Build();
-        //var triggerBuilder = TriggerBuilder.Create()
-        //    .ForJob(jobKey)
-        //    .WithIdentity(jobName);
-        //if (startNow) triggerBuilder.StartNow();
-        //triggerBuilder.WithCronSchedule(cron);
-        ////if(triggerType.Equals(SchedulerType.Normal)) triggerBuilder.WithCalendarIntervalSchedule(opt =>
-        ////{
-        ////    opt.WithInterval()
-        ////})
-        //triggerBuilder.WithSimpleSchedule(action =>
-        //{
-
-        //});
-        //triggerBuilder.Build();
-
-        await scheduler.ScheduleJob(job, trigger);
-        //await PauseJob(jobName);
-        Console.WriteLine($"Add job {jobName}");
+        await scheduler.ScheduleJob(jobDetail, trigger);
+        Console.WriteLine($"Added job [{jobDetail.Key.Group}:{jobDetail.Key.Name}]");
     }
+
+    public async Task AddCronJob<T>(JobKey jobKey, TriggerKey triggerKey, string cron, JobDataMap? jobDataMap = null, bool startNow = false) where T : IJob
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        var job = CreateJobBuilder<T>(jobKey, jobDataMap).Build();
+        var trigger = CreateCronTriggerBuilder(jobKey, triggerKey, cron, startNow).Build();
+        await scheduler.ScheduleJob(job, trigger);
+        Console.WriteLine($"Added cron job {job.Key.Name}");
+    }
+
+    public async Task AddSimpleJob<T>(JobKey jobKey, TriggerKey triggerKey, int interval, int repeatCount, JobDataMap? jobDataMap = null, bool startNow = false) where T : IJob
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        var job = CreateJobBuilder<T>(jobKey, jobDataMap).Build();
+        var trigger = CreateSimpleTriggerBuilder(jobKey, triggerKey, interval, repeatCount, startNow).Build();
+        await scheduler.ScheduleJob(job, trigger);
+        Console.WriteLine($"Added simple job {job.Key.Name}");
+    }
+    #endregion
+
+    #region Private
+
+    #region JobBuilder
+    private static JobBuilder CreateJobBuilder<T>(JobKey jobKey, JobDataMap? jobDataMap = null, string jobDescription = "") where T : IJob
+    {
+        var jobBuilder = JobBuilder.Create<T>()
+            .WithIdentity(jobKey)
+            .WithDescription(jobDescription);
+
+        if (jobDataMap != null)
+        {
+            jobBuilder.UsingJobData(jobDataMap);
+        }
+
+        return jobBuilder;
+    }
+    #endregion
+
+    #region TriggerBuilder
+    private static TriggerBuilder CreateCronTriggerBuilder(JobKey jobKey, TriggerKey triggerKey, string cronExpression, bool startNow = false)
+    {
+        var triggerBuilder = CreateTriggerBuilder(jobKey, triggerKey, startNow)
+            .WithCronSchedule(cronExpression);
+        return triggerBuilder;
+    }
+
+    private static TriggerBuilder CreateSimpleTriggerBuilder(JobKey jobKey, TriggerKey triggerKey, int interval, int repeatCount, bool startNow = false)
+    {
+        var triggerBuilder = CreateTriggerBuilder(jobKey, triggerKey, startNow)
+            .WithSimpleSchedule(config =>
+            {
+                config.WithInterval(TimeSpan.FromMilliseconds(interval))
+                      .WithRepeatCount(repeatCount);
+            });
+        return triggerBuilder;
+    }
+
+    /// <summary>
+    /// 创建触发器构造器
+    /// </summary>
+    /// <param name="jobKey"><see cref="JobKey"></param>
+    /// <param name="triggerKey"><see cref="TriggerKey"></param>
+    /// <param name="startNow">Job with such trigger will start now if <see cref="true"/></param>
+    /// <returns></returns>
+    private static TriggerBuilder CreateTriggerBuilder(JobKey jobKey, TriggerKey triggerKey, bool startNow = false)
+    {
+        var triggerBuilder = TriggerBuilder
+           .Create()
+           .ForJob(jobKey)
+           .WithIdentity(triggerKey);
+        if (startNow)
+        {
+            triggerBuilder.StartNow();
+        }
+
+        return triggerBuilder;
+    }
+    #endregion
+
+    #endregion
 
     public async Task RemoveJob(string jobName)
     {
@@ -97,10 +149,50 @@ public class QuartzService : IQuartzService
         await scheduler.ResumeJob(jobKey);
         Console.WriteLine($"Resume job {jobName}");
     }
-}
 
-public enum SchedulerType
-{
-    Cron,
-    Normal
+    public async Task PauseJobsByGroup([MinLength(1)] string jobGroupName)
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+
+        await scheduler.PauseJobs(GroupMatcher<JobKey>.GroupEquals(jobGroupName));
+    }
+
+    public async Task PauseTriggersByGroup(string triggerGroupName)
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.PauseTriggers(GroupMatcher<TriggerKey>.GroupEquals(triggerGroupName));
+    }
+
+    public async Task<IEnumerable<string>> GetJobGroupNames()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        return await scheduler.GetJobGroupNames();
+    }
+
+    public async Task<IEnumerable<string>> GetTriggerGroupNames()
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        return await scheduler.GetTriggerGroupNames();
+    }
+
+    public async Task ResumeJobsByGroup(string jobGroupName)
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        await scheduler.ResumeJobs(GroupMatcher<JobKey>.GroupEquals(jobGroupName));
+        Console.WriteLine($"Resume jobs {jobGroupName}");
+    }
+
+    public async Task<IEnumerable<string>> GetJobNamesByGroup(string jobGroupName)
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals(jobGroupName));
+        return jobKeys.Select(jk => jk.Name);
+    }
+
+    public async Task<IEnumerable<string>> GetTriggerNamesByGroup(string triggerGroupName)
+    {
+        var scheduler = await _schedulerFactory.GetScheduler();
+        var jobKeys = await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEquals(triggerGroupName));
+        return jobKeys.Select(jk => jk.Name);
+    }
 }

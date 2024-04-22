@@ -9,12 +9,15 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        Console.Title = "QuartzTest";
         var builder = WebApplication.CreateBuilder(args);
 
         //builder.Host.ConfigureSilkierQuartzHost();
         // Add services to the container.
 
         builder.Services.AddControllers();
+        //builder.Services.AddControllersWithViews();
+
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
