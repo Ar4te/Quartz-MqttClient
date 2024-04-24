@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using Quartz;
 using Quartz.Impl.Matchers;
 using QuartzTest.IServices;
@@ -150,11 +151,18 @@ public class QuartzService : IQuartzService
         Console.WriteLine($"Resume job {jobName}");
     }
 
-    public async Task PauseJobsByGroup([MinLength(1)] string jobGroupName)
+    public async Task PauseJobsByGroup([MinLength(1), NotNull] string jobGroupName)
     {
         var scheduler = await _schedulerFactory.GetScheduler();
+        try
+        {
+            await scheduler.PauseJobs(GroupMatcher<JobKey>.GroupEquals(jobGroupName));
+        }
+        catch (Exception ex)
+        {
 
-        await scheduler.PauseJobs(GroupMatcher<JobKey>.GroupEquals(jobGroupName));
+            throw new Exception(ex.Message, ex);
+        }
     }
 
     public async Task PauseTriggersByGroup(string triggerGroupName)
@@ -194,5 +202,16 @@ public class QuartzService : IQuartzService
         var scheduler = await _schedulerFactory.GetScheduler();
         var jobKeys = await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEquals(triggerGroupName));
         return jobKeys.Select(jk => jk.Name);
+    }
+
+    public async Task StartJob(string jobName, string jobGroupName = "")
+    {
+        var jobKey = new JobKey(jobName, jobGroupName);
+        var scheduler = await _schedulerFactory.GetScheduler();
+        var triggers = await scheduler.GetTriggersOfJob(jobKey);
+        foreach (var trigger in triggers)
+        {
+            await scheduler.ResumeTrigger(trigger.Key);
+        }
     }
 }

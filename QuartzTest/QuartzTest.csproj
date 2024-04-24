@@ -9,6 +9,7 @@
 
     <ItemGroup>
         <PackageReference Include="MQTTnet" Version="4.3.3.952" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
         <PackageReference Include="Quartz.Extensions.DependencyInjection" Version="3.7.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     </ItemGroup>

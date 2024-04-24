@@ -22,4 +22,5 @@ public interface IQuartzService
     Task<IEnumerable<string>> GetTriggerGroupNames();
     Task PauseTriggersByGroup(string triggerGroupName);
     Task<IEnumerable<string>> GetTriggerNamesByGroup(string triggerGroupName);
+    Task StartJob(string jobName, string jobGroupName = "");
 }

@@ -42,10 +42,10 @@ public class WeatherForecastController : ControllerBase
 
         for (var i = 0; i < 4; i++)
         {
-            _telemetryTasks.Add(new TelemetryTask($"G{new Random().Next(1, 5)}", 5000, "", telemetryType: (TelemetryTypeEnum)new Random().Next(1, 4)));
+            _telemetryTasks.Add(new TelemetryTask($"G{new Random().Next(1, 5)}", 5000, "", telemetryType: (TelemetryTypeEnum)new Random().Next(1, 4), enable: (new Random().NextDouble() * 10 - 5) < 0.5));
         }
 
-        for (int i = 0; i < 20; i++)
+        for (var i = 0; i < 20; i++)
         {
             var index = (i + 1).ToString().PadLeft(2, '0');
             _telemetryPoints.Add(new TelemetryPoint($"点位{index}", $"p{index}", "plcGroup1", "plc1", "127.0.0.1", "int", RWTypeEnum.OnlyRead, "", "", "", "", "", _telemetryTasks[new Random().Next(0, 3)]));
@@ -153,8 +153,18 @@ public class WeatherForecastController : ControllerBase
     {
         foreach (var telemetryPoint in _telemetryPoints)
         {
-            await _quartzService.AddJob(telemetryPoint.CreateJobDetail(JobBuilder.Create<TelemetryPointJob>()), telemetryPoint.CreateTrigger());
+            if (telemetryPoint.TelemetryTask.Enable)
+            {
+                await _quartzService.AddJob(telemetryPoint.CreateJobDetail(JobBuilder.Create<TelemetryPointJob>()), telemetryPoint.CreateTrigger());
+            }
         }
         return Ok(true);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> StartJob(string jobName)
+    {
+        await _quartzService.StartJob(jobName);
+        return Ok();
     }
 }
